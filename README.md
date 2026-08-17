@@ -6,12 +6,29 @@
 
 ## Motivation and Fit
 
-My interest in Jaeger was shaped by mentors who had previously participated in projects connected to Prometheus, Kyverno, LitmusChaos, Kubestellar, and LLVM. They introduced me to CNCF and LFX Mentorship, and Jaeger stood out because of its connection to observability and MLOps. I have already worked in Jaeger’s development workflow through merged [PR #8825](https://github.com/jaegertracing/jaeger/pull/8825) and active [PR #9102](https://github.com/jaegertracing/jaeger/pull/9102) and [PR #9324](https://github.com/jaegertracing/jaeger/pull/9324), gaining experience with the codebase, review workflow, and project conventions.
+My interest in Jaeger was shaped by mentors who had previously participated in
+projects connected to Prometheus, Kyverno, LitmusChaos, KubeStellar, and LLVM.
+They introduced me to CNCF and LFX Mentorship, and Jaeger stood out because of
+its connection to observability and MLOps. I have already worked in Jaeger's
+development workflow through merged
+[PR #8825](https://github.com/jaegertracing/jaeger/pull/8825) and active
+[PR #9102](https://github.com/jaegertracing/jaeger/pull/9102) and
+[PR #9324](https://github.com/jaegertracing/jaeger/pull/9324), gaining experience
+with the codebase, review workflow, and project conventions.
 
-I currently intern at a startup where I create benchmarking tasks for frontier AI models, particularly for software-engineering tasks. This experience is directly relevant to designing controlled scenarios, evaluation criteria, and reproducible agent trials. I also study machine learning through Andrej Karpathy’s material and Andrew Ng’s CS229 course.
+I currently intern at a startup where I create benchmarking tasks for frontier
+AI models, particularly for software-engineering tasks. This experience is
+directly relevant to designing controlled scenarios, evaluation criteria, and
+reproducible agent trials. My current workflow validates each task with an Oracle
+that must score `1` and a NOP runner that must score `0`, while keeping verifier
+data outside the agent-visible environment. I will apply the same quality gate
+here. I also study machine learning through Andrej Karpathy's material and Andrew
+Ng's CS229 course.
 
-I can commit 30 hours per week during the term alongside my internship, with fixed weekly blocks reserved for the mentorship. I will maintain weekly goals, keep a dated progress log, raise design questions on the tracking issue, and submit small, reviewable PRs.
-
+I can commit 30 hours per week during the term alongside my internship, with
+fixed weekly blocks reserved for the mentorship. I will maintain weekly goals,
+keep a dated progress log, raise design questions on the tracking issue, and
+submit small, reviewable PRs.
 
 ## Project Understanding
 
@@ -37,13 +54,12 @@ before accepting it as an improvement.
 
 | Area | Details |
 |---|---|
-| Current interface | Jaeger’s query extension exposes nine telemetry and Skill tools. |
+| Current interface | Jaeger's query extension exposes nine telemetry and Skill tools. |
 | Shared endpoint | The tools are available through the shared streamable-HTTP endpoint: `/api/ai/mcp/`. |
 | Skill loading | `read_skill` progressively loads Markdown playbooks such as `error-root-cause` and `detect-n-plus-one`. |
 | Evaluation focus | The goal is not merely to check whether an LLM produces a plausible explanation. |
 | Key question | Which tool contracts and Skill instructions help the LLM reach trace-supported evidence accurately? |
 | Success criteria | Fewer failures, stronger evidence, and lower context usage. |
-
 
 ## 1. Isolating Trace-Solvable Incidents
 
@@ -65,18 +81,14 @@ I will verify each scenario in four steps:
 
 The starting set will include `cartFailure`, `paymentFailure`,
 `paymentUnreachable`, `adFailure`, `imageSlowLoad`, and
-`intlShippingSlowdown`. I will first validate one end-to-end scenario, then expand
-to 5-8 scenarios only if the evidence gate remains stable. For example, with
-`paymentUnreachable` enabled, the agent should identify the failed
-checkout-to-payment call and cite its error spans; the same traffic with the flag
-disabled should not produce that diagnosis.
-
-Demo flags will be checked before use because their behavior can change between versions.
+`intlShippingSlowdown`. For example, with `paymentUnreachable` enabled, the agent
+should identify the failed checkout-to-payment call and cite its error spans; the
+same traffic with the flag disabled should not produce that diagnosis. Demo flags
+will be checked before use because their behavior can change between versions.
 Failures that require logs or host-level data, such as memory leaks or CPU
 problems, will not be included unless traces clearly contain enough information.
 Healthy or incomplete cases will also check whether the agent avoids making
-unsupported claims. The final suite will contain 5-8 verified scenarios if the
-initial vertical slice supports reliable expansion.
+unsupported claims. The final suite will contain 5-8 verified scenarios.
 
 ## 2. Evaluation Loop
 
@@ -84,32 +96,31 @@ initial vertical slice supports reliable expansion.
 flowchart TD
     S["Scenario runner<br/>sets fault and fixed traffic"] --> D[OpenTelemetry Demo]
     D -->|OTLP traces| J["Jaeger test arm<br/>MCP tool schema + Skill"]
+    S --> M["Scenario manifest<br/>expected service, operation, and spans"]
 
-    Q[Qwen3-8B] <--> I["Inspect AI<br/>ReAct agent"]
-    I <-->|"MCP calls<br/>/api/ai/mcp/"| J
+    G[Gemini 2.5 Flash] <--> A[Agent runner]
+    A <-->|"MCP calls<br/>/api/ai/mcp/"| J
+    O["Scripted Oracle<br/>expected score: 1"] -->|Known-valid MCP path| J
+    N["NOP runner<br/>expected score: 0"] --> P
 
-    I --> L["EvalLog<br/>tool calls, tokens, and answer"]
-    S --> G["Expected answer<br/>service, operation, and spans"]
-    L --> C[Deterministic scorers]
-    G --> C
-    C --> V["Inspect View<br/>compare A/B arms"]
+    A --> P["Opik<br/>trajectory and experiment record"]
+    O --> P
+    P --> C[Deterministic scorer]
+    M -.->|Oracle input| O
+    M -.->|scorer input| C
+    C --> V["A/B report<br/>tools x Skills"]
 ```
+
 ### Framework and Model
 
-I will use [Inspect AI](https://inspect.aisi.org.uk/), an open-source evaluation
-framework with native HTTP MCP tools, agent loops, custom scorers, complete eval
-logs, and a local viewer. This covers execution, capture, scoring, and inspection
-without adding a separate agent framework and observability backend.
+I will use self-hosted [Opik](https://github.com/comet-ml/opik) to store and compare
+experiments. A small Python runner will call Jaeger's shared MCP endpoint and
+record each model turn and tool call as an Opik trace.
 
-The primary model will be the Apache-2.0-licensed
-[Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B), served locally through a pinned
-vLLM OpenAI-compatible endpoint. It is small enough for repeatable local runs and
-is explicitly designed for tool use. I will record the model revision,
-quantization, vLLM version, context limit, reasoning mode, decoding settings, and
-seed where supported. Five repeated runs per scenario/arm with the same pinned
-configuration will expose stochastic variance instead of treating one favorable
-trajectory as a result; deterministic scenario setup and readiness checks will be
-separated from model-output reproducibility.
+The model will be **Gemini 2.5 Flash**, matching Jaeger's existing Gemini
+sidecar. I will pin the model name, prompt, tool manifest, Jaeger commit,
+configuration, and generation settings for every run. Five repeated runs per arm
+will show variation instead of treating one favorable run as a result.
 
 ### Run and Capture
 
@@ -127,12 +138,9 @@ answer contract will be structured:
 }
 ```
 
-Inspect's log will retain every model message and tool call. Additional MCP
-instrumentation will record the tool name, arguments, result status, empty
-results, serialized response bytes, timestamps, and the Jaeger/config/Skill
-hashes. Actual model usage will provide per-turn and cumulative input/output
-tokens. This separates the static tool-schema cost from dynamic tool responses
-and captures the cost of carrying early responses through later turns.
+Opik will retain every model turn and tool call. The runner will record tool name,
+arguments, result status, empty results, response bytes, timestamps, token usage,
+and the Jaeger/config/Skill hashes.
 
 ### Scoring
 
@@ -149,18 +157,16 @@ and captures the cost of carrying early responses through later turns.
 - **Trajectory quality:** repeated-call/cycle rate, abstention on negative
   controls, latency, truncation encountered, and termination at the step limit.
 
-Primary correctness will be machine-scored against the manifest using structured
-answers, span-existence checks, evidence assertions, and captured trajectories.
-Version 1 will not use an LLM judge for correctness; qualitative explanation review
-can be added later, after the deterministic scoring path is established.
+Before model trials, the scripted Oracle must score `1` and the NOP runner must
+score `0`. If either check fails, the scenario or scorer is invalid. The scenario
+manifest is available only to the Oracle and scorer; Gemini sees only the incident
+prompt and Jaeger MCP responses.
 
-The first milestone is `1 scenario x 4 arms x 5 repeats = 20 runs`. If the
-vertical slice is stable, the expanded experiment will use up to six scenarios,
-for a maximum of 120 runs. Runs will be paired by scenario and pinned run
-configuration. I will report per-scenario results, medians and IQRs for trajectory
-metrics, and bootstrap confidence intervals, while retaining raw trajectories for
-review. The server instructions, agent prompt, history policy, MCP limits, model
-settings, and traffic will remain constant across arms.
+Primary correctness is machine-scored against the manifest. The first milestone
+is one validated scenario, Oracle/NOP checks, and `4 arms x 5 repeats = 20` Gemini
+runs. After that works end to end, I will expand to 5-8 scenarios. Results will be
+reported per scenario with medians and ranges; raw Opik traces remain available
+for review. Prompts, limits, model settings, and traffic stay fixed across arms.
 
 ## 3. Variations to Test
 
@@ -204,7 +210,7 @@ This tests whether explicit identifiers, compact error context, and visible
 truncation reduce malformed follow-up calls and context without moving the final
 decision entirely into Go. Internal query work and bytes will still be counted,
 so a composite tool cannot win merely because it hides several calls behind one.
-A stretch arm may compare full `SpanDetail` output with a narrow error-focused
+A stretch arm will compare full `SpanDetail` output with a narrow error-focused
 schema, directly testing the context-cost concern tracked in
 [issue #9330](https://github.com/jaegertracing/jaeger/issues/9330).
 
@@ -235,14 +241,11 @@ progressive-disclosure guidance does not silently become another variable.
 
 | Weeks | Phase and output |
 |---|---|
-| 1-2 | Research only: study current MCP/Skills code, ORCA-bench and RCA methods; compare frameworks; define the solvability gate, metrics, manifests, and experiment protocol with mentor review before production coding. |
-| 3-4 | Build scenario orchestration and healthy/fault fixtures; validate one scenario and expand toward 5-8 only if it passes the evidence gate. |
-| 5-6 | Implement the direct-MCP Inspect harness, structured answers, trajectory capture, deterministic scorers, and one end-to-end baseline. |
-| 7 | Implement and test the analytical tool/schema arm in Go, including limits and truncation signals. |
-| 8 | Author goal-oriented and procedural Skill arms and add Skill-level regression tests. |
-| 9-10 | Run the paired 2x2 experiment on the validated scenarios, repeat failed infrastructure runs, and audit trajectories. A model/config robustness check is stretch work. |
-| 11 | Analyze results, document limitations, and agree with mentors on the evidence-backed default. |
-| 12 | Upstream selected MCP/Skill changes with tests and docs; publish the reproducible report and final demo. |
+| 1-2 | Lock one scenario, answer manifest, metrics, and Oracle/NOP checks with mentor review before changing production code. |
+| 3-5 | Build the Python MCP runner, Opik capture, deterministic scorer, and first 20 Gemini trials. |
+| 6-8 | Implement the tool-shape and Skill variants with focused Go and Skill tests. |
+| 9-10 | Expand only validated scenarios and run the fixed 2x2 comparison. |
+| 11-12 | Select the best default, upstream the supported changes, and publish raw traces, report, tests, and documentation. |
 
 ## Risks and Deliverables
 
@@ -250,14 +253,13 @@ progressive-disclosure guidance does not silently become another variable.
   revisions and scenario manifests will be pinned.
 - Truncated data will never be scored as efficient context use. Missing count or
   warning signals will be fixed or documented as a controlled limitation.
-- Model variance will be handled by paired repeated runs, pinned configurations,
-  distributional reporting, and raw-log review, not by selecting the best run.
+- Model variation will be handled by repeated runs and raw Opik-trace review, not
+  by selecting the best run.
 
-If the analytical tool arm slips, the minimum deliverable remains the versioned
-benchmark, local Inspect harness, deterministic scorers, and tested Skill/tool
-comparison. The final output will include the validated 5-8-scenario benchmark,
-raw and summary results, an evidence-backed default recommendation, and
-upstream-quality tests and documentation.
+The final output will include the versioned 5-8-scenario benchmark, Python MCP
+runner with self-hosted Opik, tested Go and Skill variants, raw/summary results,
+an evidence-backed default recommendation, and upstream-quality tests and
+documentation.
 
 ## References
 
@@ -265,9 +267,102 @@ upstream-quality tests and documentation.
 - [Jaeger mentorship application guidelines](https://www.jaegertracing.io/mentorship/applying/)
 - [Current MCP tool registration](https://github.com/jaegertracing/jaeger/blob/096f3f57158a2aa1e96648cf47eb030b63f86836/cmd/jaeger/internal/extension/jaegerquery/internal/mcptools/server.go)
 - [Current Skills authoring and loading behavior](https://github.com/jaegertracing/jaeger/blob/096f3f57158a2aa1e96648cf47eb030b63f86836/cmd/jaeger/internal/extension/jaegerquery/internal/mcptools/README.md)
-  
-- [Inspect AI MCP and evaluation documentation](https://inspect.aisi.org.uk/tools-mcp.html)
-- [Qwen3-8B model card](https://huggingface.co/Qwen/Qwen3-8B)
-- [ORCA-bench: How Ready Are Language Model Agents for Oncall?](https://arxiv.org/abs/2607.28545)
+- [OpenTelemetry Demo feature flags](https://opentelemetry.io/docs/demo/feature-flags/)
+- [Opik open-source evaluation platform](https://github.com/comet-ml/opik)
+- [Jaeger's Gemini 2.5 Flash sidecar](https://github.com/jaegertracing/jaeger/tree/main/scripts/ai-sidecar/gemini)
 
 ---
+
+# Submission Notes (Do Not Export With the Proposal)
+
+## Reproducibility Record
+
+| Item | Value |
+|---|---|
+| Jaeger commit | `096f3f57158a2aa1e96648cf47eb030b63f86836` |
+| OS | Pop!_OS 22.04 LTS, x86_64 |
+| Go | `go1.26.0` |
+| Python | `3.10.12` |
+| Docker client/server | `29.6.1` |
+
+Required repository checks and build:
+
+```bash
+make fmt
+make lint
+make test
+make build-jaeger
+```
+
+Local source startup:
+
+```bash
+make build-ui
+go run ./cmd/jaeger --config ./cmd/jaeger/config.yaml
+```
+
+Current-checkout MCP configuration:
+
+```yaml
+extensions:
+  jaeger_query:
+    ai:
+      mcp: {}
+```
+
+The shared endpoint is `http://localhost:16686/api/ai/mcp/`. On this checkout,
+the presence of `ai.mcp` enables it; there is no `ai.enable_mcp` field. Older
+releases such as v2.20.0 used `ai.enable_mcp: true`, so every benchmark record
+must pair the binary SHA with the matching configuration.
+
+Docker quick start (not for benchmark runs because `latest` is mutable):
+
+```bash
+docker run --rm --name jaeger \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  -p 4318:4318 \
+  jaegertracing/jaeger:latest
+```
+
+## Minimal Media Plan
+
+Use no more than two visual artifacts; the PDF must remain understandable without
+opening an external link.
+
+1. **One evidence figure in the PDF:** a clean two-panel image showing the enabled
+   demo fault and the corresponding Jaeger trace with the decisive span selected.
+   Caption it with scenario ID, Jaeger SHA, and exact service/operation. Redact
+   tokens, usernames, and unrelated browser tabs.
+2. **One 60-90 second recording:** show flag reset/injection, fixed traffic,
+   `/api/ai/mcp/` tool use, the final structured answer, and the Opik trajectory
+   report. Put a clickable thumbnail/link in the PDF, but do not rely on the video
+   for any proposal claim. Use an unlisted YouTube video or a read-only Drive link
+   and verify it in a private browser window.
+
+After real runs exist, replace the second screenshot with one compact chart:
+exact-locus accuracy versus median cumulative input tokens for the four arms,
+including run count and uncertainty. Never add a mock chart or estimated result.
+
+## Small Pre-Submission Benchmark
+
+If time permits, run only one verified error scenario with the current tool shape:
+current/goal Skill versus procedural Skill, five repeated fault runs per arm, plus a
+healthy abstention check. Lock the exact operation/span evidence marker before
+running; do not use only the service name.
+
+| Arm | Exact locus (x/5) | Valid evidence (x/5) | Median calls | Call errors | Median cumulative input tokens | Cycles |
+|---|---:|---:|---:|---:|---:|---:|
+| Goal Skill | TBD | TBD | TBD | TBD | TBD | TBD |
+| Procedural Skill | TBD | TBD | TBD | TBD | TBD | TBD |
+
+Replace every `TBD` with measured data and link the raw eval log. If the run
+cannot be completed, remove this table rather than presenting estimates.
+
+## Final PDF Checklist
+
+- Export only the proposal above the `Submission Notes` divider, ideally as a
+  3-4 page PDF.
+- Add at most one evidence figure and one optional video link.
+- Confirm all links work and the PDF contains selectable text.
+- Keep claims tied to raw logs, commit/config hashes, or cited sources.
