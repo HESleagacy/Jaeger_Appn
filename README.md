@@ -19,10 +19,7 @@ with the codebase, review workflow, and project conventions.
 I currently intern at a startup where I create benchmarking tasks for frontier
 AI models, particularly for software-engineering tasks. This experience is
 directly relevant to designing controlled scenarios, evaluation criteria, and
-reproducible agent trials. My current workflow validates each task with an Oracle
-that must score `1` and a NOP runner that must score `0`, while keeping verifier
-data outside the agent-visible environment. I will apply the same quality gate
-here. I also study machine learning through Andrej Karpathy's material and Andrew
+reproducible agent trials. I also study machine learning through Andrej Karpathy's material and Andrew
 Ng's CS229 course.
 
 I can commit 30 hours per week during the term alongside my internship, with
