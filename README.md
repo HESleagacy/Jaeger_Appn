@@ -265,7 +265,7 @@ upstream-quality tests and documentation.
 - [Jaeger mentorship application guidelines](https://www.jaegertracing.io/mentorship/applying/)
 - [Current MCP tool registration](https://github.com/jaegertracing/jaeger/blob/096f3f57158a2aa1e96648cf47eb030b63f86836/cmd/jaeger/internal/extension/jaegerquery/internal/mcptools/server.go)
 - [Current Skills authoring and loading behavior](https://github.com/jaegertracing/jaeger/blob/096f3f57158a2aa1e96648cf47eb030b63f86836/cmd/jaeger/internal/extension/jaegerquery/internal/mcptools/README.md)
-- [OpenTelemetry Demo feature flags](https://opentelemetry.io/docs/demo/feature-flags/)
+  
 - [Inspect AI MCP and evaluation documentation](https://inspect.aisi.org.uk/tools-mcp.html)
 - [Qwen3-8B model card](https://huggingface.co/Qwen/Qwen3-8B)
 - [ORCA-bench: How Ready Are Language Model Agents for Oncall?](https://arxiv.org/abs/2607.28545)
